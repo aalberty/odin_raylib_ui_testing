@@ -104,6 +104,8 @@ main :: proc() {
     currently_held: ^Sticky
     move_held_to: Vector2
     move_offset: Vector2
+    last_click_timestamp: f64
+    time_since_last_click: f64
 
     rl.SetConfigFlags({.VSYNC_HINT})
     rl.InitWindow(WIDTH, HEIGHT, TITLE)
@@ -111,8 +113,25 @@ main :: proc() {
     rl.SetTargetFPS(60)
 
     current_page: Page = home_page
-
+    frame_counter: i32 = 0
+    frame_tally: i32 = 60
+    
+    // TODO: verbose logging flag that can be used when exe is called
+    log_frames: bool =  false
     for !rl.WindowShouldClose() {
+
+        if log_frames {
+            if frame_counter < 60 {
+                frame_counter = frame_counter + 1
+            }
+            
+            if frame_counter == 60 {
+                now := rl.GetTime()
+                fmt.println(frame_tally, "frames took", now, "second(s)")
+                frame_counter = 0
+                frame_tally = frame_tally + 60
+            }
+        }
 
         rl.BeginDrawing()
         defer rl.EndDrawing()
@@ -153,8 +172,20 @@ main :: proc() {
 
         // fmt.println("about to check for clicks")
         if rl.IsGestureDetected(rl.Gesture.TAP) {
+            now := rl.GetTime()
+            time_since_last_click = now - last_click_timestamp
+            last_click_timestamp = now 
+            
             click_pos := Vector2{rl.GetTouchX(), rl.GetTouchY()}
-            fmt.println("click detected -- x: ", click_pos.x, " y: ", click_pos.y)
+            is_right := rl.IsMouseButtonPressed(rl.MouseButton.RIGHT)
+            mouse_button: string
+            if is_right {
+                mouse_button = "Right"
+            } else {
+                mouse_button = "Left"
+            }
+
+            fmt.println(mouse_button, "click detected -- x:", click_pos.x, "y:", click_pos.y, "\nIt has been", time_since_last_click, "seconds since last click event was detected.")
             x_bound: bool = (click_me.position.x < click_pos.x) && (click_pos.x < (click_me.position.x + click_me.size.x))
             y_bound: bool = (click_me.position.y < click_pos.y) && (click_pos.y < (click_me.position.y + click_me.size.y))
             
@@ -211,4 +242,8 @@ main :: proc() {
             }
         }
     }
+
+    // TODO: handle doubleclick for text content editing
+    // iter_1 - just detect the dbl_click and log something to indicate
+    // we'll figure out text later
 }
