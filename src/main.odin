@@ -15,6 +15,8 @@ MIDX :: WIDTH / 2
 MIDY :: HEIGHT / 2
 FONT_SIZE :: 18
 
+FPS :: 60
+
 Vector2 :: struct {
     x: i32,
     y: i32,
@@ -72,6 +74,18 @@ draw_sticky :: proc(sticky: Sticky) {
     rl.DrawText(sticky.text, obj_text_pos.x, obj_text_pos.y, sticky.font_size, sticky.font_color)
 }
 
+// returns (x_bool, y_bool); if a bool is true, it means the obj is within window bounds
+// on that axis of movement
+check_against_window_bounds :: proc (obj_pos: Vector2, obj_size: Vector2) -> (x: bool, y: bool) {
+    left: bool = obj_pos.x >= 0
+    right: bool = (obj_pos.x + obj_size.x) <= WIDTH
+    top: bool = obj_pos.y >= 0
+    bottom: bool = (obj_pos.y + obj_size.y) <= HEIGHT
+
+    x = left && right
+    y = top && bottom
+    return x, y
+}
 
 main :: proc() {
 
@@ -110,11 +124,12 @@ main :: proc() {
     rl.SetConfigFlags({.VSYNC_HINT})
     rl.InitWindow(WIDTH, HEIGHT, TITLE)
     defer rl.CloseWindow() 
-    rl.SetTargetFPS(60)
+    rl.SetTargetFPS(FPS)
 
     current_page: Page = home_page
     frame_counter: i32 = 0
     frame_tally: i32 = 60
+    double_click_timestamp: f64 = rl.GetTime()
     
     // TODO: verbose logging flag that can be used when exe is called
     log_frames: bool =  false
@@ -145,13 +160,31 @@ main :: proc() {
 
         // update sticky location if there's one currently held
         if currently_held != nil {
-            // TODO: don't let it move off of the window bounds
-            // AKA ignore move_held_to values that are outside of window bounds;
-            // this approach will make it so that even if the mouse is dragged to an invalid
-            // location, as soon as it comes back within the bounds, then the sticky pos will
-            // start updating again
-            currently_held.position.x = move_held_to.x
-            currently_held.position.y = move_held_to.y
+            allow_move_x, allow_move_y := check_against_window_bounds(move_held_to, currently_held.size)
+
+            if allow_move_x {
+                currently_held.position.x = move_held_to.x
+            } else {
+                fmt.println("WARN: Detected collision on x axis")
+                if move_held_to.x < MIDX {
+                    move_held_to.x = 0
+                } else {
+                    move_held_to.x = (WIDTH - currently_held.size.x)
+                }
+                currently_held.position.x = move_held_to.x
+            }
+
+            if allow_move_y {
+                currently_held.position.y = move_held_to.y
+            } else {
+                fmt.println("WARN: Detected collision on y axis")
+                if move_held_to.y < MIDY {
+                    move_held_to.y = 0
+                } else {
+                    move_held_to.y = (HEIGHT - currently_held.size.y)
+                }
+                currently_held.position.y = move_held_to.y
+            }
         }
         
         for sticky in stickies {
@@ -185,7 +218,7 @@ main :: proc() {
                 mouse_button = "Left"
             }
 
-            fmt.println(mouse_button, "click detected -- x:", click_pos.x, "y:", click_pos.y, "\nIt has been", time_since_last_click, "seconds since last click event was detected.")
+            // fmt.println(mouse_button, "click detected -- x:", click_pos.x, "y:", click_pos.y, "\nIt has been", time_since_last_click, "seconds since last click event was detected.")
             x_bound: bool = (click_me.position.x < click_pos.x) && (click_pos.x < (click_me.position.x + click_me.size.x))
             y_bound: bool = (click_me.position.y < click_pos.y) && (click_pos.y < (click_me.position.y + click_me.size.y))
             
@@ -241,9 +274,25 @@ main :: proc() {
                 currently_held = nil
             }
         }
+
+        // dbl_click detection
+        if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+            now := rl.GetTime()
+
+            diff := (now - double_click_timestamp)
+            within_double_click_limit: bool = (diff <= 0.5)
+            
+            if within_double_click_limit {
+                fmt.println("INFO: Double click detected.")
+                // TODO: impl text editing if the double click occurred on an object w/ editable content
+            } else {
+                double_click_timestamp = now
+            }
+        }
+
     }
 
-    // TODO: handle doubleclick for text content editing
-    // iter_1 - just detect the dbl_click and log something to indicate
-    // we'll figure out text later
+
+
+
 }
